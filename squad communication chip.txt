@@ -1,0 +1,150 @@
+--@name Squad Communication Chip
+--@author jon b
+--@shared
+if SERVER then
+    
+    --[[
+    ========COMMANDS========
+    To use commands, type them in >>>TEAM CHAT<<<
+    - !squadlink [playername]
+        + Attempt to search for and link to that player's SCC.
+          If succesful it will send a request to that player for you to join their squad.
+    - !accept [playername]
+        + Accept the squad link request from that player.
+    - !deny [playername]
+        + Deny the squad link request from that player.
+    - !leavesquad
+        + Removes you from the squad you are currently in.
+    ========================
+    ]]
+    
+    SquadChips,LinkRequests = {chip()},{}
+    owner_name = owner():getName()
+    
+    function Update()
+        for _,v in pairs(SquadChips) do if not isValid(v) or v:getOwner() == nil then table.removeByValue(SquadChips,v) end end
+        net.start("UpdateClient") net.writeTable(SquadChips) net.send()
+        printTable(SquadChips)
+    end
+    hook.add("PlayerSay","",function(ply,msg,isteam)
+        if ply == owner() and isteam then
+            msg = string.explode(" ",msg)
+            local findPly = find.playersByName(msg[2])
+            local findNum = table.count(findPly)
+            if msg[1] == "!squadlink" then
+                if findNum == 0 then print(Color(200,60,60),"No player found with that name!")
+                elseif findNum == 1 then linkTo = find.byClass("starfall_processor",function(e) return e:getOwner() == findPly[1] and e:getChipName() == "Squad Communication Chip" end)[1] print(Color(60,200,60),"Request sent!")
+                    hook.runRemote(linkTo,{
+                        type = "link_request",
+                        message = owner_name.." would like to join your squad. \"!accept "..owner_name.."\" in TEAM CHAT to accept."
+                        })
+                else printTable(findPly)
+                end
+            elseif msg[1] == "!accept" then
+                if LinkRequests[findPly[1]:getName()] then local chip = LinkRequests[findPly[1]:getName()] table.insert(SquadChips,chip) table.removeByValue(LinkRequests,chip) print(Color(60,200,60),"Request accepted.") hook.runRemote(chip,{
+                    type = "link_accept",
+                    message = "Squad Link accepted! Welcome to the party.",
+                    squadtable = SquadChips
+                    })
+                else print(Color(200,60,60),"No request found.") end
+            elseif msg[1] == "!deny" then
+                if LinkRequests[findPly[1]:getName()] then local chip = LinkRequests[findPly[1]:getName()] table.removeByValue(LinkRequests,chip) print(Color(60,200,60),"Request denied.") hook.runRemote(chip,{
+                    type = "link_deny",
+                    message = "Squad Link denied."
+                    })
+                else print(Color(200,60,60),"No request found.") end
+            elseif msg[1] == "!leavesquad" then
+                for _,v in pairs(SquadChips) do
+                    if v ~= chip() then hook.runRemote(v,{
+                        type = "unlink",
+                        message = owner_name.." has left the squad."
+                        })
+                    end
+                end
+                SquadChips = {chip()}
+            end
+            return ""
+        end
+        end)
+    hook.add("Remote","",function(chip,ply,data)
+        if data.type == "link_request" then print(data.message) LinkRequests[ply:getName()]=chip
+        elseif data.type == "link_accept" then print(data.message) SquadChips = data.squadtable Update()
+        elseif data.type == "link_deny" then print(data.message)
+        elseif data.type == "unlink" then print(data.message) table.removeByValue(SquadChips,chip)
+        elseif data.type == "quick_talk" then print(data.message) net.start("drawping") net.writeVector(data.vector) net.send()
+        end
+        end)
+    hook.add("PlayerDisconnected","",function() Update() end)
+    QuickTalkExplained = {
+        "I need Help!",
+        "I'm low on HP!",
+        "Follow me.",
+        "Attack this position!",
+        "Hold here.",
+        "Defend this position!",
+        "Sniper spotted here.",
+        "Tank spotted here.",
+        "Aircraft spotted here."
+    }
+    net.receive("quicktalk",function()
+        local num = net.readFloat()
+        local vec = net.readVector()
+        for _,v in pairs(SquadChips) do
+            hook.runRemote(v,{
+                type = "quick_talk",
+                message = "["..owner_name.."] "..QuickTalkExplained[num],
+                vector = vec
+                })
+        end
+        end)
+elseif CLIENT then
+    local changedTable = {}
+    function changed(index,obj)
+        local bool = (obj ~= changedTable[index])
+        changedTable[index] = obj
+        return bool
+    end
+    if player() == owner() then
+        enableHud(owner(),true)
+        local resX,resY = render.getGameResolution()
+        local SquadPlayers = {}
+        net.receive("UpdateClient",function()
+            SquadChips = net.readTable()
+            SquadPlayers = {}
+            for i,v in pairs(SquadChips) do SquadPlayers[i] = v:getOwner() end
+            end)
+        local render_drawRectOutline = render.drawRectOutline
+        local render_drawRectFast = render.drawRectFast
+        local render_setColor = render.setColor
+        local QTbool = false
+        local QuickTalk = render.parseMarkup([[<font=Trebuchet24>1. Help
+2. Low HP
+3. Follow
+4. Attack
+5. Hold
+6. Defend
+7. Sniper
+8. Tank
+9. Aircraft
+0. Close</font>
+]])
+        local qtW,qtH = QuickTalk:getSize()
+        local chat = sound.create(owner(),"friends/message.wav")
+        local pings = {}
+        net.receive("drawping",function() local vec = net.readVector() local index = table.insert(pings,vec) timer.simple(5,function() table.remove(pings,index) end) chip():emitSound("friends/message.wav",0) end)
+        hook.add("drawhud","",function()
+            if changed("pressV",input.isKeyDown(KEY.V)) and input.isKeyDown(KEY.V) then
+                QTbool = not QTbool
+            end
+            if QTbool then
+                render_setColor(Color(0,0,0,200))
+                render_drawRectFast(0,resY*0.5-qtH/2-10,qtW+20,qtH+20)
+                QuickTalk:draw(10,resY*0.5,TEXT_ALIGN.LEFT,TEXT_ALIGN.CENTER)
+                if not owner():isTyping() and input.isKeyDown(KEY["0"]) then QTbool = false end
+                for i=1,9,1 do if not owner():isTyping() and input.isKeyDown(KEY[tostring(i)]) then QTbool = false net.start("quicktalk") net.writeFloat(i) if i < 4 then net.writeVector(owner():obbCenterW()) else net.writeVector(owner():getEyeTrace().HitPos) end net.send() end end
+            end
+            for _,v in pairs(SquadPlayers) do local pos = v:obbCenterW():toScreen() if pos.visible then render_setColor(Color(60,60,255)) render_drawRectOutline(pos.x-10,pos.y-10,20,20,3) end end
+            for _,v in pairs(pings) do local pos = v:toScreen() render_setColor(Color(200,60,60)) render_drawRectOutline(pos.x-10,pos.y-10,20,20,3) end
+            end)
+    end
+end
