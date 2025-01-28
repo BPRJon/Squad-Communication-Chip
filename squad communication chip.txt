@@ -24,7 +24,6 @@ if SERVER then
     function Update()
         for _,v in pairs(SquadChips) do if not isValid(v) or v:getOwner() == nil then table.removeByValue(SquadChips,v) end end
         net.start("UpdateClient") net.writeTable(SquadChips) net.send()
-        printTable(SquadChips)
     end
     hook.add("PlayerSay","",function(ply,msg,isteam)
         if ply == owner() and isteam then
@@ -71,7 +70,7 @@ if SERVER then
         elseif data.type == "link_accept" then print(data.message) SquadChips = data.squadtable Update()
         elseif data.type == "link_deny" then print(data.message)
         elseif data.type == "unlink" then print(data.message) table.removeByValue(SquadChips,chip)
-        elseif data.type == "quick_talk" then print(data.message) net.start("drawping") net.writeVector(data.vector) net.send()
+        elseif data.type == "quick_talk" then print(data.message) net.start("drawping") net.writeVector(data.vector) net.writeFloat(data.time) net.send()
         end
         end)
     hook.add("PlayerDisconnected","",function() Update() end)
@@ -93,7 +92,8 @@ if SERVER then
             hook.runRemote(v,{
                 type = "quick_talk",
                 message = "["..owner_name.."] "..QuickTalkExplained[num],
-                vector = vec
+                vector = vec,
+                time = timer.curtime()
                 })
         end
         end)
@@ -131,7 +131,7 @@ elseif CLIENT then
         local qtW,qtH = QuickTalk:getSize()
         local chat = sound.create(owner(),"friends/message.wav")
         local pings = {}
-        net.receive("drawping",function() local vec = net.readVector() local index = table.insert(pings,vec) timer.simple(5,function() table.remove(pings,index) end) chip():emitSound("friends/message.wav",0) end)
+        net.receive("drawping",function() local vec,time = net.readVector(),net.readFloat() table.insert(pings,{vec,time}) chip():emitSound("friends/message.wav",0) end)
         hook.add("drawhud","",function()
             if changed("pressV",input.isKeyDown(KEY.V)) and input.isKeyDown(KEY.V) then
                 QTbool = not QTbool
@@ -143,8 +143,8 @@ elseif CLIENT then
                 if not owner():isTyping() and input.isKeyDown(KEY["0"]) then QTbool = false end
                 for i=1,9,1 do if not owner():isTyping() and input.isKeyDown(KEY[tostring(i)]) then QTbool = false net.start("quicktalk") net.writeFloat(i) if i < 4 then net.writeVector(owner():obbCenterW()) else net.writeVector(owner():getEyeTrace().HitPos) end net.send() end end
             end
-            for _,v in pairs(SquadPlayers) do local pos = v:obbCenterW():toScreen() if pos.visible then render_setColor(Color(60,60,255)) render_drawRectOutline(pos.x-10,pos.y-10,20,20,3) end end
-            for _,v in pairs(pings) do local pos = v:toScreen() render_setColor(Color(200,60,60)) render_drawRectOutline(pos.x-10,pos.y-10,20,20,3) end
+            for _,v in pairs(SquadPlayers) do local pos = v[1]:obbCenterW():toScreen() if pos.visible then render_setColor(Color(60,60,255)) render_drawRectOutline(pos.x-10,pos.y-10,20,20,3) end end
+            for i,v in pairs(pings) do if timer.curtime() - v[2] < 5 then local pos = v[1]:toScreen() if pos.visible then render_setColor(Color(200,60,60)) render_drawRectOutline(pos.x-10,pos.y-10,20,20,3) end else table.remove(pings,i) end end
             end)
     end
 end
