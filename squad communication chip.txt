@@ -26,7 +26,7 @@ if SERVER then
         net.start("UpdateClient") net.writeTable(SquadChips) net.send()
     end
     hook.add("PlayerSay","",function(ply,msg,isteam)
-        if ply == owner() and isteam then
+        if ply == owner() then
             msg = string.explode(" ",msg)
             local findPly = find.playersByName(msg[2])
             local findNum = table.count(findPly)
