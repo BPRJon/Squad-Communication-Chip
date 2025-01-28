@@ -5,7 +5,7 @@ if SERVER then
     
     --[[
     ========COMMANDS========
-    To use commands, type them in >>>TEAM CHAT<<<
+    To use commands, type them in chat
     - !squadlink [playername]
         + Attempt to search for and link to that player's SCC.
           If succesful it will send a request to that player for you to join their squad.
@@ -32,12 +32,12 @@ if SERVER then
             local findNum = table.count(findPly)
             if msg[1] == "!squadlink" then
                 if findNum == 0 then print(Color(200,60,60),"No player found with that name!")
-                elseif findNum == 1 then linkTo = find.byClass("starfall_processor",function(e) return e:getOwner() == findPly[1] and e:getChipName() == "Squad Communication Chip" end)[1] print(Color(60,200,60),"Request sent!")
+                elseif findNum == 1 then local linkTo = find.byClass("starfall_processor",function(e) return e:getOwner() == findPly[1] and e:getChipName() == "Squad Communication Chip" end)[1] print(Color(60,200,60),"Request sent!")
                     hook.runRemote(linkTo,{
                         type = "link_request",
-                        message = owner_name.." would like to join your squad. \"!accept "..owner_name.."\" in TEAM CHAT to accept."
+                        message = owner_name.." would like to join your squad. \"!accept "..owner_name.."\" in chat to accept."
                         })
-                else printTable(findPly)
+                else net.start("toomanyoptions") net.writeTable(findPly) net.send(owner())
                 end
             elseif msg[1] == "!accept" then
                 if LinkRequests[findPly[1]:getName()] then local chip = LinkRequests[findPly[1]:getName()] table.insert(SquadChips,chip) table.removeByValue(LinkRequests,chip) print(Color(60,200,60),"Request accepted.") hook.runRemote(chip,{
@@ -66,11 +66,11 @@ if SERVER then
         end
         end)
     hook.add("Remote","",function(chip,ply,data)
-        if data.type == "link_request" then print(data.message) LinkRequests[ply:getName()]=chip
-        elseif data.type == "link_accept" then print(data.message) SquadChips = data.squadtable Update()
-        elseif data.type == "link_deny" then print(data.message)
-        elseif data.type == "unlink" then print(data.message) table.removeByValue(SquadChips,chip)
-        elseif data.type == "quick_talk" then print(data.message) net.start("drawping") net.writeVector(data.vector) net.writeFloat(data.time) net.send()
+        if data.type == "link_request" then print(Color(60,200,200),data.message) LinkRequests[ply:getName()]=chip
+        elseif data.type == "link_accept" then print(Color(60,200,60),data.message) SquadChips = data.squadtable Update()
+        elseif data.type == "link_deny" then print(Color(200,60,60),data.message)
+        elseif data.type == "unlink" then print(Color(60,60,60),data.message) table.removeByValue(SquadChips,chip)
+        elseif data.type == "quick_talk" then print(Color(200,200,60),data.message) net.start("drawping") net.writeVector(data.vector) net.writeFloat(data.time) net.send()
         end
         end)
     hook.add("PlayerDisconnected","",function() Update() end)
@@ -96,6 +96,14 @@ if SERVER then
                 time = timer.curtime()
                 })
         end
+        end)
+    net.receive("selectplayer",function()
+        local ply = net.readEntity()
+        local linkTo = find.byClass("starfall_processor",function(e) return e:getOwner() == ply and e:getChipName() == "Squad Communication Chip" end)[1] print(Color(60,200,60),"Request sent!")
+        hook.runRemote(linkTo,{
+            type = "link_request",
+            message = owner_name.." would like to join your squad. \"!accept "..owner_name.."\" in chat to accept."
+            })
         end)
 elseif CLIENT then
     local changedTable = {}
@@ -132,6 +140,19 @@ elseif CLIENT then
         local chat = sound.create(owner(),"friends/message.wav")
         local pings = {}
         net.receive("drawping",function() local vec,time = net.readVector(),net.readFloat() table.insert(pings,{vec,time}) chip():emitSound("friends/message.wav",0) end)
+        net.receive("toomanyoptions",function()
+            local findPly = net.readTable()
+            local str = "<font=Trebuchet24>"
+            for i,v in pairs(findPly) do if i <= 9 then str = str..i..". "..v:getName().."\n" else break end end
+            local markup = render.parseMarkup(str)
+            hook.add("drawhud","Options",function()
+                QTbool = false
+                render_setColor(Color(0,0,0,200))
+                render_drawRectFast(0,resY*0.5-qtH/2-10,qtW+20,qtH+20)
+                markup:draw(10,resY*0.5,TEXT_ALIGN.LEFT,TEXT_ALIGN.CENTER)
+                for i=1,9 do if findPly[i] and not owner():isTyping() and input.isKeyDown(KEY[tostring(i)]) then net.start("selectplayer") net.writeEntity(findPly[i]) net.send() hook.remove("drawhud","Options") end end
+                end)
+            end)
         hook.add("drawhud","",function()
             if changed("pressV",input.isKeyDown(KEY.V)) and input.isKeyDown(KEY.V) then
                 QTbool = not QTbool
