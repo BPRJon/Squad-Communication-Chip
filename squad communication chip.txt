@@ -28,41 +28,46 @@ if SERVER then
     hook.add("PlayerSay","",function(ply,msg,isteam)
         if ply == owner() then
             msg = string.explode(" ",msg)
-            local findPly = find.playersByName(msg[2])
-            local findNum = table.count(findPly)
-            if msg[1] == "!squadlink" then
-                if findNum == 0 then print(Color(200,60,60),"No player found with that name!")
-                elseif findNum == 1 then local linkTo = find.byClass("starfall_processor",function(e) return e:getOwner() == findPly[1] and e:getChipName() == "Squad Communication Chip" end)[1] print(Color(60,200,60),"Request sent!")
-                    hook.runRemote(linkTo,{
-                        type = "link_request",
-                        message = owner_name.." would like to join your squad. \"!accept "..owner_name.."\" in chat to accept."
-                        })
-                else net.start("toomanyoptions") net.writeTable(findPly) net.send(owner())
+            if string.startsWith(msg[1],"!") then
+                if table.count(msg) > 1 then
+                    findPly = find.playersByName(msg[2])
+                    findNum = table.count(findPly)
                 end
-            elseif msg[1] == "!accept" then
-                if LinkRequests[findPly[1]:getName()] then local chip = LinkRequests[findPly[1]:getName()] table.insert(SquadChips,chip) table.removeByValue(LinkRequests,chip) print(Color(60,200,60),"Request accepted.") hook.runRemote(chip,{
-                    type = "link_accept",
-                    message = "Squad Link accepted! Welcome to the party.",
-                    squadtable = SquadChips
-                    })
-                else print(Color(200,60,60),"No request found.") end
-            elseif msg[1] == "!deny" then
-                if LinkRequests[findPly[1]:getName()] then local chip = LinkRequests[findPly[1]:getName()] table.removeByValue(LinkRequests,chip) print(Color(60,200,60),"Request denied.") hook.runRemote(chip,{
-                    type = "link_deny",
-                    message = "Squad Link denied."
-                    })
-                else print(Color(200,60,60),"No request found.") end
-            elseif msg[1] == "!leavesquad" then
-                for _,v in pairs(SquadChips) do
-                    if v ~= chip() then hook.runRemote(v,{
-                        type = "unlink",
-                        message = owner_name.." has left the squad."
-                        })
+                if msg[1] == "!squadlink" then
+                    if findNum == 0 then print(Color(200,60,60),"No player found with that name!")
+                    elseif findNum == 1 then local linkTo = find.byClass("starfall_processor",function(e) return e:getOwner() == findPly[1] and e:getChipName() == "Squad Communication Chip" end)[1] print(Color(60,200,60),"Request sent!")
+                        hook.runRemote(linkTo,{
+                            type = "link_request",
+                            message = owner_name.." would like to join your squad. \"!accept "..owner_name.."\" in chat to accept."
+                            })
+                    else net.start("toomanyoptions") net.writeTable(findPly) net.send(owner())
                     end
+                elseif msg[1] == "!accept" then
+                    if LinkRequests[findPly[1]:getName()] then local chip = LinkRequests[findPly[1]:getName()] table.insert(SquadChips,chip) table.removeByValue(LinkRequests,chip) print(Color(60,200,60),"Request accepted.") hook.runRemote(chip,{
+                        type = "link_accept",
+                        message = "Squad Link accepted! Welcome to the party.",
+                        squadtable = SquadChips
+                        })
+                    else print(Color(200,60,60),"No request found.") end
+                elseif msg[1] == "!deny" then
+                    if LinkRequests[findPly[1]:getName()] then local chip = LinkRequests[findPly[1]:getName()] table.removeByValue(LinkRequests,chip) print(Color(60,200,60),"Request denied.") hook.runRemote(chip,{
+                        type = "link_deny",
+                        message = "Squad Link denied."
+                        })
+                    else print(Color(200,60,60),"No request found.") end
+                elseif msg[1] == "!leavesquad" then
+                    print(Color(200,60,60),"Left squad.")
+                    for _,v in pairs(SquadChips) do
+                        if v ~= chip() then hook.runRemote(v,{
+                            type = "unlink",
+                            message = owner_name.." has left the squad."
+                            })
+                        end
+                    end
+                    SquadChips = {chip()}
                 end
-                SquadChips = {chip()}
+                return ""
             end
-            return ""
         end
         end)
     hook.add("Remote","",function(chip,ply,data)
@@ -154,7 +159,7 @@ elseif CLIENT then
                 end)
             end)
         hook.add("drawhud","",function()
-            if changed("pressV",input.isKeyDown(KEY.V)) and input.isKeyDown(KEY.V) then
+            if changed("pressV",input.isKeyDown(KEY.V)) and input.isKeyDown(KEY.V) and not owner():isTyping() then
                 QTbool = not QTbool
             end
             if QTbool then
@@ -164,7 +169,7 @@ elseif CLIENT then
                 if not owner():isTyping() and input.isKeyDown(KEY["0"]) then QTbool = false end
                 for i=1,9,1 do if not owner():isTyping() and input.isKeyDown(KEY[tostring(i)]) then QTbool = false net.start("quicktalk") net.writeFloat(i) if i < 4 then net.writeVector(owner():obbCenterW()) else net.writeVector(owner():getEyeTrace().HitPos) end net.send() end end
             end
-            for _,v in pairs(SquadPlayers) do local pos = v[1]:obbCenterW():toScreen() if pos.visible then render_setColor(Color(60,60,255)) render_drawRectOutline(pos.x-10,pos.y-10,20,20,3) end end
+            for _,v in pairs(SquadPlayers) do if v ~= owner() then local pos = v[1]:obbCenterW():toScreen() if pos.visible then render_setColor(Color(60,60,255)) render_drawRectOutline(pos.x-10,pos.y-10,20,20,3) end end end
             for i,v in pairs(pings) do if timer.curtime() - v[2] < 5 then local pos = v[1]:toScreen() if pos.visible then render_setColor(Color(200,60,60)) render_drawRectOutline(pos.x-10,pos.y-10,20,20,3) end else table.remove(pings,i) end end
             end)
     end
